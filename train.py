@@ -4,11 +4,13 @@ import pickle
 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix
 
-# -----------------------------
-# STEP 1: Generate Synthetic Data
-# -----------------------------
+# ---------------------------------------------------
+# STEP 1: Generate Synthetic Dataset
+# ---------------------------------------------------
 
 np.random.seed(42)
 n = 500
@@ -24,55 +26,85 @@ data = {
 
 df = pd.DataFrame(data)
 
-# Placement logic (rule-based)
-df["Placed"] = (
-    (df["CGPA"] > 7) &
-    (df["AptitudeScore"] > 60) &
-    (df["TechnicalSkill"] > 5)
-).astype(int)
+# Create weighted score (realistic logic)
+
+score = (
+    0.30 * (df["CGPA"] / 10) +
+    0.25 * (df["TechnicalSkill"] / 10) +
+    0.20 * (df["AptitudeScore"] / 100) +
+    0.15 * (df["CommunicationSkill"] / 10) +
+    0.10 * ((df["Internships"] + df["Projects"]) / 10)
+)
+
+# Add randomness (noise)
+noise = np.random.normal(0, 0.05, n)
+
+probability = score + noise
+
+# Convert to binary outcome
+df["Placed"] = (probability > 0.6).astype(int)
 
 print("Dataset Created ✅")
-print(df.head())
 
-# -----------------------------
-# STEP 2: Define Features & Target
-# -----------------------------
+# ---------------------------------------------------
+# STEP 2: Features & Target
+# ---------------------------------------------------
 
 X = df.drop("Placed", axis=1)
 y = df["Placed"]
 
-# -----------------------------
-# STEP 3: Train-Test Split
-# -----------------------------
+feature_names = list(X.columns)
 
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-# -----------------------------
-# STEP 4: Train Model
-# -----------------------------
+# ---------------------------------------------------
+# STEP 3: Train Multiple Models
+# ---------------------------------------------------
 
-model = LogisticRegression()
-model.fit(X_train, y_train)
+models = {
+    "Logistic Regression": LogisticRegression(max_iter=1000),
+    "Decision Tree": DecisionTreeClassifier(),
+    "Random Forest": RandomForestClassifier()
+}
 
-# -----------------------------
-# STEP 5: Evaluate Model
-# -----------------------------
+results = {}
+conf_matrices = {}
 
-y_pred = model.predict(X_test)
+for name, model in models.items():
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    
+    acc = accuracy_score(y_test, y_pred)
+    cm = confusion_matrix(y_test, y_pred)
+    
+    results[name] = acc
+    conf_matrices[name] = cm
+    
+    print(f"{name} Accuracy: {round(acc*100,2)}%")
 
-accuracy = accuracy_score(y_test, y_pred)
-cm = confusion_matrix(y_test, y_pred)
+# ---------------------------------------------------
+# STEP 4: Select Best Model
+# ---------------------------------------------------
 
-print("\nModel Trained Successfully ✅")
-print("Accuracy:", accuracy)
-print("Confusion Matrix:\n", cm)
+best_model_name = max(results, key=results.get)
+best_model = models[best_model_name]
 
-# -----------------------------
-# STEP 6: Save Model
-# -----------------------------
+print(f"\nBest Model: {best_model_name}")
 
-pickle.dump(model, open("model/model.pkl", "wb"))
+# ---------------------------------------------------
+# STEP 5: Save Everything
+# ---------------------------------------------------
 
-print("\nModel Saved Successfully ✅")
+model_data = {
+    "best_model_name": best_model_name,
+    "best_model": best_model,
+    "all_accuracies": results,
+    "confusion_matrices": conf_matrices,
+    "features": feature_names
+}
+
+pickle.dump(model_data, open("model/model.pkl", "wb"))
+
+print("\nMulti-Model Training Completed ✅")
